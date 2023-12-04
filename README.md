@@ -24,5 +24,7 @@ To run the project, follow these steps:
 mkdir build
 cd build
 cmake ..
+make
+cd ..
 mpirun -np 2 ./main
 ```
