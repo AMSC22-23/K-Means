@@ -1,24 +1,24 @@
-# Define the minimum required version of CMake
+# Set the minimum version of CMake required to build the project
 cmake_minimum_required(VERSION 3.10)
 
-# Define the project name and the language
-project(MyProject CXX)
+# Set the project name and version
+project(main VERSION 1.0)
 
-# Define the C++ standard
-set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_STANDARD_REQUIRED True)
+# Find the MPI package
+find_package(MPI REQUIRED)
 
-# Define the executable name
-set(EXE main)
+# Add the executable target
+add_executable(main main.cpp)
 
-# Define the source files
-file(GLOB SRC src/*.cpp)
+# Add the src and lib directories to the include path
+target_include_directories(main PRIVATE src lib)
 
-# Define the library path
-set(LIB lib/)
+# Link the MPI libraries to the executable
+target_link_libraries(main MPI::MPI_CXX)
 
-# Define the include path
-include_directories(${LIB})
-
-# Add the executable
-add_executable(${EXE} main.cpp ${SRC})
+# Set the C++ standard to 11
+set_target_properties(main PROPERTIES
+    CXX_STANDARD 11
+    CXX_STANDARD_REQUIRED YES
+    CXX_EXTENSIONS NO
+)
