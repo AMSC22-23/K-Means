@@ -35,6 +35,27 @@ void Dataset::readData(std::string filename)
         std::cout << "\ntest: " << names << std::endl;
         if (filename.rfind(filename, 0) == 0 && names.find(".csv") != std::string::npos)
         {
+            // the file is a match
+            // open and read the file
+            std::ifstream myfile;      // create an input file stream object
+            myfile.open(entry.path()); // open the file
+            if (myfile.is_open())
+            {
+                // the file is open
+                std::string line; // a string to store each line
+                while (std::getline(myfile, line))
+                {
+                    // read each line until the end of the file
+                    // process the line
+                    std::cout << line << std::endl; // print the line to the standard output
+                }
+                myfile.close(); // close the file
+            }
+            else
+            {
+                // the file could not be opened
+                std::cerr << "Error: could not open the file." << std::endl;
+            }
         }
     }
 };
