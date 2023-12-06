@@ -2,10 +2,10 @@
 
 Dataset::Dataset(int numberOfPoints, int numberOfClusters, int maxIteraion, std::string filename)
 {
-    int numberOfPoints = this->numberOfPoints;
-    int numberOfClusters = this->numberOfClusters;
-    int maxIteration = this->maxIteration;
-    std::string filename = this->filename;
+    this->numberOfPoints = numberOfPoints;
+    this->numberOfClusters = numberOfClusters;
+    this->maxIteration = maxIteraion;
+    this->filename = filename;
 };
 
 void Dataset::generateData()
@@ -25,4 +25,16 @@ void Dataset::generateData()
 
     dataFile.close();
 };
-void Dataset::readData(){};
+void Dataset::readData(std::string filename)
+{
+    std::string path = "data/";
+    for (const auto &entry : std::filesystem::directory_iterator(path))
+    {
+        // loop through all the files in the folder
+        std::string names = entry.path().filename().string(); // get the file name
+        std::cout << "\ntest: " << names << std::endl;
+        if (filename.rfind(filename, 0) == 0 && names.find(".csv") != std::string::npos)
+        {
+        }
+    }
+};

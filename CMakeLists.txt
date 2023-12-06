@@ -41,3 +41,6 @@ if(MPI_CXX_FOUND)
 else()
     target_link_libraries(${PROJECT_NAME} ${LIBRARIES})
 endif()
+
+# Set the output directory for the executable file
+set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})

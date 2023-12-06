@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <filesystem>
 #include <string>
 #include <ctime>
 
@@ -13,5 +14,5 @@ struct Dataset
     std::string filename;
     Dataset(int numberOfPoints, int numberOfClusters, int maxIteration, std::string filename);
     void generateData();
-    void readData();
+    void readData(std::string filename);
 };
