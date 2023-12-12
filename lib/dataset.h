@@ -32,7 +32,9 @@ struct Dataset
     std::vector<Point> pointList;
     std::vector<Cluster> clusterList;
     std::string filename;
+
     Dataset(int numberOfPoints, int numberOfClusters, int maxIteration, std::string filename);
+
     void generateData();
     void readData(std::string filename);
     void showDataPoints();

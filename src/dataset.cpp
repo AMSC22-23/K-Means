@@ -134,7 +134,7 @@ void Dataset::createClusters()
     for (int i = 0; i < this->numberOfClusters; i++)
     {
         // create two local value to determine the range of the vector
-        int b, e = 0;
+        int b = 0, e = 0;
         if (i == 0)
         {
             b = b + (i * 20);
@@ -147,11 +147,14 @@ void Dataset::createClusters()
 
         std::vector<Point> temp(this->pointList.begin() + b, this->pointList.begin() + e);
         Cluster cl(i, temp);
+        this->clusterList.push_back(cl);
     }
 }
 
 void Dataset::showTheClusterData()
 {
+    std::cout << "----- The Cluster -----" << std::endl;
+
     for (int i = 0; i < this->clusterList.size(); i++)
     {
         std::cout << this->clusterList[i].id << std::endl;

@@ -10,5 +10,6 @@ int main(int argc, char *argv[])
     data.generateData();
     data.readData("test");
     data.showDataPoints();
+    data.createClusters();
     data.showTheClusterData();
 }
