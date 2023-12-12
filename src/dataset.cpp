@@ -17,24 +17,62 @@ Dataset::Dataset(int numberOfPoints, int numberOfClusters, int maxIteraion, std:
 
 void Dataset::generateData()
 {
-    std::ofstream dataFile;
-    dataFile.open("data/" + this->filename + "-" + std::to_string(this->numberOfPoints) + "-" + std::to_string(this->numberOfClusters) + ".csv", std::ios::app);
+    bool fileFlag = false;
 
-    if (dataFile)
+    std::string path = "data/";
+    if (std::filesystem::directory_entry(path).exists())
     {
-        // set a seed
-        std::srand(std::time(NULL));
-        for (int p = 0; p < this->numberOfPoints; p++)
+        for (const auto &entry : std::filesystem::directory_iterator(path))
         {
-            dataFile << std::rand()
-                     << ",";
-        }
-        // end of file
-        dataFile << "\n";
+            fileFlag = true;
+            // loop through all the files in the folder
+            std::string names = entry.path().filename().string(); // get the file name
+            if (!(filename.rfind(filename, 0) == 0 && names.find(".csv") != std::string::npos))
+            {
+                std::ofstream dataFile;
+                dataFile.open(path + this->filename + "-" + std::to_string(this->numberOfPoints) + "-" + std::to_string(this->numberOfClusters) + ".csv", std::ios_base::in);
 
-        dataFile.close();
-    }
-};
+                if (dataFile)
+                {
+                    // set a seed
+                    std::srand(std::time(NULL));
+                    for (int p = 0; p < this->numberOfPoints; p++)
+                    {
+                        dataFile << std::rand()
+                                 << ",";
+                    }
+                    // end of file
+                    dataFile << "\n";
+
+                    dataFile.close();
+                }
+            }
+        }
+
+        if (fileFlag == false)
+        {
+            std::cout << fileFlag << std::endl;
+            std::ofstream dataFile;
+            dataFile.open(path + this->filename + "-" + std::to_string(this->numberOfPoints) + "-" + std::to_string(this->numberOfClusters) + ".csv");
+
+            if (dataFile)
+            {
+                // set a seed
+                std::srand(std::time(NULL));
+                for (int p = 0; p < this->numberOfPoints; p++)
+                {
+                    dataFile << std::rand()
+                             << ",";
+                }
+                // end of file
+                dataFile << "\n";
+
+                dataFile.close();
+            }
+        }
+    };
+}
+
 void Dataset::readData(std::string filename)
 {
     std::string path = "data/";
@@ -81,5 +119,41 @@ void Dataset::showDataPoints()
     for (int i = 0; i < this->pointList.size(); i++)
     {
         std::cout << this->pointList[i].id << ' ' << this->pointList[i].value << std::endl;
+    }
+}
+
+Cluster::Cluster(int id, std::vector<Point> data)
+{
+    this->id = id;
+    this->mean = 0;
+    this->data = data;
+}
+
+void Dataset::createClusters()
+{
+    for (int i = 0; i < this->numberOfClusters; i++)
+    {
+        // create two local value to determine the range of the vector
+        int b, e = 0;
+        if (i == 0)
+        {
+            b = b + (i * 20);
+        }
+        else
+        {
+            b = (b + (i * 20)) + 1;
+        }
+        e = e + 20 * (i + 1);
+
+        std::vector<Point> temp(this->pointList.begin() + b, this->pointList.begin() + e);
+        Cluster cl(i, temp);
+    }
+}
+
+void Dataset::showTheClusterData()
+{
+    for (int i = 0; i < this->clusterList.size(); i++)
+    {
+        std::cout << this->clusterList[i].id << std::endl;
     }
 }
