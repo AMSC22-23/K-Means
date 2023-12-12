@@ -1,4 +1,5 @@
 #include "../lib/dataset.h"
+#include <mpi.h>
 
 Point::Point(int pointId, int pointValue)
 {
@@ -122,33 +123,71 @@ void Dataset::showDataPoints()
     }
 }
 
-Cluster::Cluster(int id, std::vector<Point> data)
+Cluster::Cluster(int id)
 {
     this->id = id;
     this->mean = 0;
-    this->data = data;
 }
 
 void Dataset::createClusters()
 {
-    for (int i = 0; i < this->numberOfClusters; i++)
-    {
-        // create two local value to determine the range of the vector
-        int b = 0, e = 0;
-        if (i == 0)
-        {
-            b = b + (i * 20);
-        }
-        else
-        {
-            b = (b + (i * 20)) + 1;
-        }
-        e = e + 20 * (i + 1);
+    // Get the rank of the current process
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-        std::vector<Point> temp(this->pointList.begin() + b, this->pointList.begin() + e);
-        Cluster cl(i, temp);
-        this->clusterList.push_back(cl);
+    // Get the total number of processes
+    int size;
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    // Check that the number of processes is 4
+    if (size != 4)
+    {
+        std::cerr << "This program requires 4 processes" << std::endl;
+        MPI_Abort(MPI_COMM_WORLD, 1);
     }
+    // Define the root process
+    int root = 0;
+
+    // Define the custom MPI data type for the cluster struct
+    MPI_Datatype mpi_cluster;
+    int count = 2;                                // number of blocks in the struct
+    int blocklengths[2] = {1, 25};                // number of elements in each block
+    MPI_Aint displacements[2] = {0, sizeof(int)}; // offsets of each block in bytes
+    MPI_Datatype types[2] = {MPI_INT, MPI_INT};
+    MPI_Type_create_struct(count, blocklengths, displacements, types, &mpi_cluster); // create the new data type
+    MPI_Type_commit(&mpi_cluster);                                                   // commit the new data type
+
+    // Allocate and initialize the vector of integers to scatter on the root process
+    std::vector<int> sendbuf;
+    if (rank == root)
+    {
+        sendbuf.resize(100); // resize the vector to 100 elements
+        for (int i = 0; i < 100; i++)
+        {
+            sendbuf[i] = i + 1; // fill the vector with 1, 2, ..., 100
+        }
+    }
+
+    // Allocate and initialize the cluster struct to receive the data on each process
+    Cluster recvbuf(rank);
+    recvbuf.id = rank;
+    recvbuf.data.resize(25);
+
+    // Perform the scatter operation
+    MPI_Scatter(sendbuf.data(), 25, MPI_INT,
+                &recvbuf, 1, mpi_cluster,
+                root, MPI_COMM_WORLD);
+
+    // Print the cluster struct on each process
+    std::cout << "Process " << rank << " received cluster: " << std::endl;
+    std::cout << "id = " << recvbuf.id << std::endl;
+
+    std::cout << std::endl;
+
+    // Free the custom MPI data type
+    MPI_Type_free(&mpi_cluster);
+
+    MPI_Finalize();
 }
 
 void Dataset::showTheClusterData()

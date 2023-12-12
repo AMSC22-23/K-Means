@@ -18,9 +18,9 @@ struct Cluster
 {
     int id;
     int mean;
-    std::vector<Point> data;
+    std::vector<int> data;
 
-    Cluster(int id, std::vector<Point> listData);
+    Cluster(int id);
     void calculateMean();
 };
 
