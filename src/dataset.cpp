@@ -1,29 +1,39 @@
 #include "../lib/dataset.h"
 
+Point::Point(int pointId, int pointValue)
+{
+    this->id = pointId;
+    this->value = pointValue;
+}
+
 Dataset::Dataset(int numberOfPoints, int numberOfClusters, int maxIteraion, std::string filename)
 {
     this->numberOfPoints = numberOfPoints;
     this->numberOfClusters = numberOfClusters;
     this->maxIteration = maxIteraion;
     this->filename = filename;
+    this->pointList = {};
 };
 
 void Dataset::generateData()
 {
     std::ofstream dataFile;
-    dataFile.open("data/" + this->filename + "-" + std::to_string(this->numberOfPoints) + "-" + std::to_string(this->numberOfClusters) + ".csv");
+    dataFile.open("data/" + this->filename + "-" + std::to_string(this->numberOfPoints) + "-" + std::to_string(this->numberOfClusters) + ".csv", std::ios::app);
 
-    // set a seed
-    std::srand(std::time(NULL));
-    for (int p = 0; p < this->numberOfPoints; p++)
+    if (dataFile)
     {
-        dataFile << std::rand()
-                 << ",";
-    }
-    // end of file
-    dataFile << "\n";
+        // set a seed
+        std::srand(std::time(NULL));
+        for (int p = 0; p < this->numberOfPoints; p++)
+        {
+            dataFile << std::rand()
+                     << ",";
+        }
+        // end of file
+        dataFile << "\n";
 
-    dataFile.close();
+        dataFile.close();
+    }
 };
 void Dataset::readData(std::string filename)
 {
@@ -32,7 +42,6 @@ void Dataset::readData(std::string filename)
     {
         // loop through all the files in the folder
         std::string names = entry.path().filename().string(); // get the file name
-        std::cout << "\ntest: " << names << std::endl;
         if (filename.rfind(filename, 0) == 0 && names.find(".csv") != std::string::npos)
         {
             // the file is a match
@@ -47,7 +56,14 @@ void Dataset::readData(std::string filename)
                 {
                     // read each line until the end of the file
                     // process the line
-                    std::cout << line << std::endl; // print the line to the standard output
+                    int idNumber = 1;
+                    std::stringstream ss(line);
+                    while (std::getline(ss, line, ','))
+                    {
+                        Point point(idNumber, std::stod(line));
+                        idNumber++;
+                        this->pointList.push_back(point);
+                    }
                 }
                 myfile.close(); // close the file
             }
@@ -59,3 +75,11 @@ void Dataset::readData(std::string filename)
         }
     }
 };
+
+void Dataset::showDataPoints()
+{
+    for (int i = 0; i < this->pointList.size(); i++)
+    {
+        std::cout << this->pointList[i].id << ' ' << this->pointList[i].value << std::endl;
+    }
+}
