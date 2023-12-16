@@ -15,5 +15,5 @@ int main(int argc, char *argv[])
     data.readData("test");
     //  data.showDataPoints();
     data.createClusters();
-    data.showTheClusterData();
+    // data.showTheClusterData();
 }

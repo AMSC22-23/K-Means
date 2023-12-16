@@ -18,10 +18,12 @@ struct Cluster
 {
     int id;
     int mean;
-    std::vector<int> data;
+    std::vector<Point> data;
 
     Cluster(int id);
-    void calculateMean();
+    Cluster(int id, std::vector<Point> data);
+    Cluster() : id(1), data(1, Point(0, 0)) {}
+    // void calculateMean();
 };
 
 struct Dataset
