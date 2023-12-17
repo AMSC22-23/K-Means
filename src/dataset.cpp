@@ -141,29 +141,25 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
     int root = 0;
 
     // Define a custom MPI datatype for Point
-    //    MPI_Datatype MPI_Point;
-    //    int blocklengths[2] = {1, 1};
-    //    MPI_Aint displacements[2] = {offsetof(Point, id), offsetof(Point, value)};
-    //    MPI_Datatype types[2] = {MPI_INT, MPI_INT};
-    //    MPI_Type_create_struct(2, blocklengths, displacements, types, &MPI_Point);
-    //    MPI_Type_commit(&MPI_Point);
-    //
-    //    // Define a custom MPI datatype for cluster
-    //    MPI_Datatype MPI_cluster;
-    //    int blocklengths2[2] = {1, 1};
-    //    MPI_Aint displacements2[2] = {offsetof(Cluster, id), offsetof(Cluster, data)};
-    //    MPI_Datatype types2[2] = {MPI_INT, MPI_Point};
-    //    MPI_Type_create_struct(2, blocklengths2, displacements2, types2, &MPI_cluster);
-    //    MPI_Type_commit(&MPI_cluster);
-    //
-    int num_procs = 4;
+    MPI_Datatype MPI_Point;
+    int blocklengths[2] = {1, 1};
+    MPI_Aint displacements[2] = {offsetof(Point, id), offsetof(Point, value)};
+    MPI_Datatype types[2] = {MPI_INT, MPI_INT};
+    MPI_Type_create_struct(2, blocklengths, displacements, types, &MPI_Point);
+    MPI_Type_commit(&MPI_Point);
 
-    // Create an array of cluster on the root process
+    // Define a custom MPI datatype for cluster
+    MPI_Datatype MPI_cluster;
+    int blocklengths2[2] = {1, 1};
+    MPI_Aint displacements2[2] = {offsetof(Cluster, id), offsetof(Cluster, data)};
+    MPI_Datatype types2[2] = {MPI_INT, MPI_Point};
+    MPI_Type_create_struct(2, blocklengths2, displacements2, types2, &MPI_cluster);
+    MPI_Type_commit(&MPI_cluster);
+
     // Create an array of Cluster on the root process
     Cluster *array = NULL;
     if (rank == 0)
     {
-        // Change the size of the array to 100
         array = new Cluster[100];
         // Fill the array with some data using constructors
         for (int i = 0; i < 100; i++)
@@ -178,8 +174,7 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
     }
 
     // Create a buffer of Cluster on each process
-    // Change the size of the buffer to 100 / num_procs
-    Cluster *buffer = new Cluster[100 / num_procs];
+    Cluster *buffer = new Cluster[100];
 
     // Create a send buffer on the root process
     int *sendbuf = NULL;
@@ -209,71 +204,41 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
         }
     }
 
-    // Create an array of send_counts and displacements on the root process
-    int *send_counts = NULL;
-    int *displs = NULL;
-    if (rank == 0)
-    {
-        // Allocate the array of send_counts and displacements
-        send_counts = new int[num_procs];
-        displs = new int[num_procs];
-        // Get the size of the MPI_PACKED type in bytes
-        int packed_size = 0;
-        MPI_Type_size(MPI_PACKED, &packed_size);
-        // Fill the array of send_counts and displacements
-        int offset = 0;
-        for (int i = 0; i < num_procs; i++)
-        {
-            // Calculate the send_count for each process based on the size of the Cluster
-            send_counts[i] = (2 + array[i].data.size() * 2) * packed_size;
-            // Assign the displacement for each process based on the offset
-            displs[i] = offset;
-            // Update the offset for the next process
-            offset += send_counts[i];
-        }
-    }
-
-    // Create a variable for recv_count on each process
-    int recv_count = 0;
-
-    // Scatter the send_counts from the root to all processes
-    MPI_Scatter(send_counts, 1, MPI_INT, &recv_count, 1, MPI_INT, 0, MPI_COMM_WORLD);
-
     // Create a receive buffer on each process
     int *recvbuf = NULL;
-    // Allocate the receive buffer based on recv_count
-    recvbuf = new int[recv_count / sizeof(int)];
+    int recvbuf_size = 0;
+    // Calculate the size of the receive buffer
+    recvbuf_size += 2 * sizeof(int);              // For id and vector size
+    recvbuf_size += (rank + 1) * 2 * sizeof(int); // For vector data
+    // Allocate the receive buffer
+    recvbuf = new int[recvbuf_size / sizeof(int)];
 
     // Scatter the send buffer from the root to all processes
-    // Use send_counts and displs as parameters for MPI_Scatter
-    MPI_Scatterv(sendbuf, send_counts, displs, MPI_PACKED, recvbuf, recv_count, MPI_PACKED, 0, MPI_COMM_WORLD);
+    MPI_Scatter(sendbuf, recvbuf_size, MPI_PACKED, recvbuf, recvbuf_size, MPI_PACKED, 0, MPI_COMM_WORLD);
 
     // Unpack the receive buffer into the buffer of Cluster
     int position = 0;
-    for (int i = 0; i < 100 / num_procs; i++)
+    MPI_Unpack(recvbuf, recvbuf_size, &position, &buffer->id, 1, MPI_INT, MPI_COMM_WORLD);
+    int vector_size = 0;
+    MPI_Unpack(recvbuf, recvbuf_size, &position, &vector_size, 1, MPI_INT, MPI_COMM_WORLD);
+    buffer->data.resize(vector_size);
+
+    for (int i = 0; i < vector_size; i++)
     {
-        MPI_Unpack(recvbuf, recv_count, &position, &buffer[i].id, 1, MPI_INT, MPI_COMM_WORLD);
-        int vector_size = 0;
-        MPI_Unpack(recvbuf, recv_count, &position, &vector_size, 1, MPI_INT, MPI_COMM_WORLD);
-        buffer[i].data.resize(vector_size);
-        for (int j = 0; j < vector_size; j++)
-        {
-            MPI_Unpack(recvbuf, recv_count, &position, &buffer[i].data[j].id, 1, MPI_INT, MPI_COMM_WORLD);
-            MPI_Unpack(recvbuf, recv_count, &position, &buffer[i].data[j].value, 1, MPI_INT, MPI_COMM_WORLD);
-        }
+        MPI_Unpack(recvbuf, recvbuf_size, &position, &buffer->data[i].id, 1, MPI_INT, MPI_COMM_WORLD);
+        MPI_Unpack(recvbuf, recvbuf_size, &position, &buffer->data[i].value, 1, MPI_INT, MPI_COMM_WORLD);
     }
 
     // Print the received data on each process
-    printf("Process %d received %d clusters:\n", rank, 100 / num_procs);
-    for (int i = 0; i < 100 / num_procs; i++)
+    // Print the received data on each process
+    printf("Process %d received %d clusters:\n", rank, 100 / 4);
+
+    printf("Cluster with id %d and data:\n", buffer->id);
+    for (int j = 0; j < buffer->data.size(); j++)
     {
-        printf("Cluster with id %d and data:\n", buffer[i].id);
-        for (int j = 0; j < buffer[i].data.size(); j++)
-        {
-            printf("Point with id %d and value %d\n", buffer[i].data[j].id, buffer[i].data[j].value);
-        }
-        printf("\n");
+        printf("Point with id %d and value %d\n", buffer->data[j].id, buffer->data[j].value);
     }
+    printf("\n");
 
     // Free the memory
     delete[] buffer;
@@ -282,43 +247,7 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
     {
         delete[] array;
         delete[] sendbuf;
-        delete[] send_counts;
-        delete[] displs;
     }
-
-    // Create an array of cluster on the root process
-    // Cluster *array = NULL;
-    // if (rank == 0)
-    // {
-    //     array = new Cluster[4];
-    //     // Fill the array with some data using constructors
-    //     for (int i = 0; i < 4; i++)
-    //     {
-    //         std::vector<Point> temp(this->pointList.begin() + 0, this->pointList.begin() + 25);
-    //         array[i] = Cluster(i, temp);
-    //     }
-    // }
-
-    // // Create a buffer of cluster on each process
-
-    // Cluster *buffer = new Cluster[1];
-    // // buffer->data.resize(25);
-
-    // MPI_Scatter((void *)array, 25, MPI_cluster, (void *)buffer, 25, MPI_cluster, 0, MPI_COMM_WORLD);
-
-    // // Print the received data on each process
-    // printf("Process %d received cluster with id %d and data\n", rank, buffer->id);
-    // for (int i = 0; i < 5; i++)
-    // {
-    //     printf("Point with id %d and value %d\n", buffer->data[i].id, buffer->data[i].value);
-    // }
-
-    // // Free the memory
-    // delete[] buffer;
-    // if (rank == 0)
-    // {
-    //     delete[] array;
-    // }
 }
 
 void Dataset::showTheClusterData()
