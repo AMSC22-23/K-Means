@@ -41,4 +41,4 @@ vendor/
 Thumbs.db
 /build
 
-main
+kmeans
