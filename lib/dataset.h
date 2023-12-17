@@ -6,11 +6,13 @@
 #include <string>
 #include <ctime>
 #include <vector>
+#include <mpi.h>
 
 struct Point
 {
     int id;
     int value;
+    Point() : id(0), value(0){};
     Point(int pointId, int pointValue);
 };
 
@@ -41,5 +43,5 @@ struct Dataset
     void readData(std::string filename);
     void showDataPoints();
     void showTheClusterData();
-    void createClusters();
+    void createClusters(int rank, MPI_Comm comm);
 };
