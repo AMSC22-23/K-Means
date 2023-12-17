@@ -140,22 +140,6 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
     // Define the root process
     int root = 0;
 
-    // Define a custom MPI datatype for Point
-    MPI_Datatype MPI_Point;
-    int blocklengths[2] = {1, 1};
-    MPI_Aint displacements[2] = {offsetof(Point, id), offsetof(Point, value)};
-    MPI_Datatype types[2] = {MPI_INT, MPI_INT};
-    MPI_Type_create_struct(2, blocklengths, displacements, types, &MPI_Point);
-    MPI_Type_commit(&MPI_Point);
-
-    // Define a custom MPI datatype for cluster
-    MPI_Datatype MPI_cluster;
-    int blocklengths2[2] = {1, 1};
-    MPI_Aint displacements2[2] = {offsetof(Cluster, id), offsetof(Cluster, data)};
-    MPI_Datatype types2[2] = {MPI_INT, MPI_Point};
-    MPI_Type_create_struct(2, blocklengths2, displacements2, types2, &MPI_cluster);
-    MPI_Type_commit(&MPI_cluster);
-
     // Create an array of Cluster on the root process
     Cluster *array = NULL;
     if (rank == 0)
@@ -229,7 +213,6 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
         MPI_Unpack(recvbuf, recvbuf_size, &position, &buffer->data[i].value, 1, MPI_INT, MPI_COMM_WORLD);
     }
 
-    // Print the received data on each process
     // Print the received data on each process
     printf("Process %d received %d clusters:\n", rank, 100 / 4);
 
