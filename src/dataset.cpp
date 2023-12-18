@@ -126,25 +126,24 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
         }
 
         // brodcast the number of clusters to all the nodes
-        //        MPI_Bcast(&this->numberOfClusters, 1, MPI_INT, root, comm);
+        MPI_Bcast(&this->numberOfClusters, 1, MPI_INT, root, comm);
         // brodcast the number of data points to all the nodes
-        //        MPI_Bcast(&this->pointList, this->pointList.size(), MPI_INT, root, comm);
+        MPI_Bcast(&this->numberOfPoints, 1, MPI_INT, root, comm);
 
         // randomly select the center points for each cluster
         for (int i = 0; i < this->numberOfClusters; i++)
         {
             int random = std::rand() % 4;
-            nodeArray[i] = this->pointList[random];
+            nodeArray[i] = sendBuffer[random];
         }
     }
-    // recv operation
     else
     {
         // receive number of broadcasted clusters
-        // MPI_Bcast(&this->numberOfClusters, 1, MPI_INT, root, comm);
+        MPI_Bcast(&this->numberOfClusters, 1, MPI_INT, root, comm);
 
         // receive number of broadcasted data points
-        //        MPI_Bcast(&this->numberOfPoints, 1, MPI_INT, root, comm);
+        MPI_Bcast(&this->numberOfPoints, 1, MPI_INT, root, comm);
     }
 
     int *recvBuffer = new int[25];
