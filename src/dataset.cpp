@@ -108,16 +108,24 @@ void Dataset::readData(std::string filename)
 void Dataset::createClusters(int rank, MPI_Comm comm)
 {
     const int number_of_processors = 4;
+    const int number_of_iterations = 20;
     // Define the root process
     int root = 0;
-    int *nodeArray = NULL;
-    nodeArray = new int[100];
+    int *nodeArray = new int[4];
 
     int *sendBuffer;
+
+    printf("\n");
+    printf("\n");
+    std::cout << "THE RANK IS: " << rank << std::endl;
+
+    printf("\n");
+    printf("\n");
 
     // send operation
     if (rank == 0)
     {
+
         sendBuffer = new int[100];
 
         for (int i = 0; i < this->numberOfPoints; i++)
@@ -133,26 +141,19 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
         // randomly select the center points for each cluster
         for (int i = 0; i < this->numberOfClusters; i++)
         {
-            int random = std::rand() % 4;
+            int random = std::rand() % 24;
             nodeArray[i] = sendBuffer[random];
         }
     }
     else
     {
-        // receive number of broadcasted clusters
         MPI_Bcast(&this->numberOfClusters, 1, MPI_INT, root, comm);
 
-        // receive number of broadcasted data points
         MPI_Bcast(&this->numberOfPoints, 1, MPI_INT, root, comm);
     }
 
+    MPI_Bcast(nodeArray, 4, MPI_INT, root, comm);
+
     int *recvBuffer = new int[25];
-
     MPI_Scatter((void *)sendBuffer, 25, MPI_INT, (void *)recvBuffer, 25, MPI_INT, root, comm);
-
-    for (int i = 0; i < 25; i++)
-    {
-        printf("The index %d number is %d", i, recvBuffer[i]);
-        printf("\n");
-    }
 }
