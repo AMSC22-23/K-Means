@@ -24,7 +24,7 @@ int main(int argc, char *argv[])
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
-    Dataset data(100, 5, 2, "test");
+    Dataset data(100, 4, 2, "test");
     data.generateData();
     data.readData("test");
     //  data.showDataPoints();
