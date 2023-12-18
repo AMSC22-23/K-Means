@@ -114,14 +114,6 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
     int *nodeArray = new int[4];
 
     int *sendBuffer;
-
-    printf("\n");
-    printf("\n");
-    std::cout << "THE RANK IS: " << rank << std::endl;
-
-    printf("\n");
-    printf("\n");
-
     // send operation
     if (rank == 0)
     {
@@ -155,5 +147,33 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
     MPI_Bcast(nodeArray, 4, MPI_INT, root, comm);
 
     int *recvBuffer = new int[25];
-    MPI_Scatter((void *)sendBuffer, 25, MPI_INT, (void *)recvBuffer, 25, MPI_INT, root, comm);
+
+    MPI_Scatter((void *)sendBuffer, this->numberOfPoints / number_of_processors, MPI_INT, (void *)recvBuffer, this->numberOfPoints / number_of_processors, MPI_INT, root, comm);
+
+    this->calcMean(nodeArray[rank], recvBuffer);
+}
+
+void Dataset::calcMean(int center, int *dataPoints)
+{
+    std::cout << "We are in calc mean function" << std::endl;
+
+    int x = 0;
+    int tmp = 0;
+    int minDist = 100000000;
+
+    for (int i = 0; i < (this->numberOfPoints / 4) + 1; i++)
+    {
+        for (int j = 0; j < this->numberOfClusters; j++)
+        {
+            x = abs(center - dataPoints[i]);
+            tmp = std::sqrt(std::pow(x, 2));
+
+            if (tmp < minDist || tmp != 0)
+            {
+                minDist = tmp;
+            }
+        }
+    }
+
+    std::cout << minDist << std::endl;
 }

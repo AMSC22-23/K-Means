@@ -6,6 +6,7 @@
 #include <string>
 #include <ctime>
 #include <vector>
+#include <cmath>
 #include <mpi.h>
 
 struct Dataset
@@ -21,7 +22,6 @@ struct Dataset
 
     void generateData();
     void readData(std::string filename);
-    void showDataPoints();
-    void showTheClusterData();
     void createClusters(int rank, MPI_Comm comm);
+    void calcMean(int center, int *dataPoints);
 };
