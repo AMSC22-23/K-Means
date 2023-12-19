@@ -7,6 +7,7 @@
 #include <ctime>
 #include <vector>
 #include <cmath>
+#include <map>
 #include <mpi.h>
 
 struct Dataset
@@ -14,6 +15,7 @@ struct Dataset
     int numberOfPoints;
     int numberOfClusters;
     int maxIteration;
+    std::map<int, std::vector<int>> cluster;
     std::vector<int> pointList;
     std::vector<int> clusterList;
     std::string filename;
@@ -23,6 +25,6 @@ struct Dataset
     void generateData();
     void readData(std::string filename);
     void createClusters(int rank, MPI_Comm comm);
-    void assignCluster(int ceneter, int *dataPoints, int *assign);
+    void initAssignCluster(int *ceneter, int *dataPoints, std::map<int, std::vector<int>> cluster);
     void calcMean(int *center, int *dataPoints, int *assign);
 };

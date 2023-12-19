@@ -111,7 +111,7 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
     const int number_of_iterations = 20;
     // Define the root process
     int root = 0;
-    int *clusterAssignment = new int[100];
+
     int *nodeArray = new int[4];
 
     int *sendBuffer;
@@ -124,20 +124,20 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
         for (int i = 0; i < this->numberOfPoints; i++)
         {
             sendBuffer[i] = this->pointList[i];
-            clusterAssignment[i] = 0;
         }
-
-        // brodcast the number of clusters to all the nodes
-        MPI_Bcast(&this->numberOfClusters, 1, MPI_INT, root, comm);
-        // brodcast the number of data points to all the nodes
-        MPI_Bcast(&this->numberOfPoints, 1, MPI_INT, root, comm);
 
         // randomly select the center points for each cluster
         for (int i = 0; i < this->numberOfClusters; i++)
         {
             int random = std::rand() % 24;
             nodeArray[i] = sendBuffer[random];
+            cluster[sendBuffer[random]];
         }
+
+        // brodcast the number of clusters to all the nodes
+        MPI_Bcast(&this->numberOfClusters, 1, MPI_INT, root, comm);
+        // brodcast the number of data points to all the nodes
+        MPI_Bcast(&this->numberOfPoints, 1, MPI_INT, root, comm);
     }
     else
     {
@@ -156,50 +156,80 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
     MPI_Scatter((void *)sendBuffer, this->numberOfPoints / number_of_processors, MPI_INT, (void *)recvBuffer, this->numberOfPoints / number_of_processors, MPI_INT, root, comm);
 
     // TODO: do this until reach the max iteration
-    MPI_Scatter((void *)clusterAssignment, this->numberOfPoints / number_of_processors, MPI_INT, (void *)assignRecv, this->numberOfPoints / number_of_processors, MPI_INT, root, comm);
+    //    MPI_Scatter((void *)clusterAssignment, this->numberOfPoints / number_of_processors, MPI_INT, (void *)assignRecv, this->numberOfPoints / number_of_processors, MPI_INT, root, comm);
 
-    this->assignCluster(nodeArray[rank], recvBuffer, assignRecv);
+    this->initAssignCluster(nodeArray, recvBuffer, cluster);
 
-    MPI_Gather((void *)assignRecv, (this->numberOfPoints / number_of_processors), MPI_INT, (void *)clusterAssignment, (this->numberOfPoints / number_of_processors), MPI_INT, root, comm);
-
-    if (rank == 0)
+    for (int j = 0; j < this->cluster[nodeArray[rank]].size(); j++)
     {
-        this->calcMean(nodeArray, recvBuffer, clusterAssignment);
+        std::cout << nodeArray[rank] << " " << this->cluster[nodeArray[rank]][j] << std::endl;
     }
+
+    //    MPI_Gather((void *)assignRecv, (this->numberOfPoints / number_of_processors), MPI_INT, (void *)clusterAssignment, (this->numberOfPoints / number_of_processors), MPI_INT, root, comm);
+
+    //    if (rank == 0)
+    //        for (int i = 0; i < 25; i++)
+    //        {
+    //            std::cout << "Things i'm receiving is: " << clusterAssignment[i] << std::endl;
+    //        }
+    //    {
+    //        this->calcMean(nodeArray, recvBuffer, clusterAssignment);
+    //    }
 }
 
-void Dataset::assignCluster(int center, int *dataPoints, int *assign)
+void Dataset::initAssignCluster(int *center, int *dataPoints, std::map<int, std::vector<int>> cluster)
 {
 
     int x = 0;
     int tmp = 0;
     int minDist = 100000000;
-    int index = 0;
 
-    for (int i = 0; i < (this->numberOfPoints / 4) + 1; i++)
+    for (int j = 0; j < this->numberOfClusters; j++)
     {
-        for (int j = 0; j < this->numberOfClusters; j++)
+        for (int i = 0; i < 25; i++)
         {
-            x = abs(center - dataPoints[i]);
-            tmp = std::sqrt(std::pow(x, 2));
-
-            if (tmp < minDist || tmp != 0)
-            {
-                minDist = tmp;
-                index = j;
-            }
+            this->cluster[center[j]].push_back(dataPoints[i]);
         }
-        assign[i] = index;
     }
 }
 
+// for (int i = 0; i < (this->numberOfPoints / 4); i++)
+//{
+//     for (int j = 0; j < this->numberOfClusters; j++)
+//     {
+//         x = abs(center[j] - dataPoints[i]);
+//         tmp = std::sqrt(std::pow(x, 2));
+//         int k_index, v_index;
+//         for (int t = 0; t < 4; t++)
+//         {
+//             for (int l = 0; l < 25; l++)
+//             {
+//                 if (dataPoints[i] == this->cluster[t][l])
+//                 {
+//                     // store the location of previous cluster
+//                     k_index = t;
+//                     v_index = l;
+//                 }
+//             }
+//         }
+//
+//         if (tmp < minDist)
+//         {
+//             minDist = tmp;
+//             // this->cluster[k_index].erase(this->cluster[k_index].begin() + v_index);
+//             // this->cluster[center[j]].push_back(dataPoints[i]);
+//         }
+//     }
+// }
+
 void Dataset::calcMean(int *ceneter, int *dataPoints, int *assign)
 {
-    for (int i = 0; i < this->numberOfPoints / 4; i++)
+    for (int j = 0; j < this->numberOfClusters; j++)
     {
-        for (int j = 0; j < this->numberOfClusters; j++)
+        // std::cout << "The center is: " << ceneter[j] << " and data values are : " << std::endl;
+        for (int i = 0; i < this->numberOfPoints / 4; i++)
         {
-            std::cout << "The center is" << ceneter[j] << std::endl;
+            //   std::cout << dataPoints[i] << std::endl;
         }
     }
 }
