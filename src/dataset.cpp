@@ -158,16 +158,19 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
     // TODO: do this until reach the max iteration
     MPI_Scatter((void *)clusterAssignment, this->numberOfPoints / number_of_processors, MPI_INT, (void *)assignRecv, this->numberOfPoints / number_of_processors, MPI_INT, root, comm);
 
-    this->calcMean(nodeArray[rank], recvBuffer);
+    this->calcMean(nodeArray[rank], recvBuffer, assignRecv);
+
+    MPI_Gather(recvBuffer, (this->numberOfPoints / number_of_processors), MPI_INT, clusterAssignment, (this->numberOfPoints / number_of_processors), MPI_INT, root, comm);
 }
 
-void Dataset::calcMean(int center, int *dataPoints)
+void Dataset::calcMean(int center, int *dataPoints, int *assign)
 {
     std::cout << "We are in calc mean function" << std::endl;
 
     int x = 0;
     int tmp = 0;
     int minDist = 100000000;
+    int index = 0;
 
     for (int i = 0; i < (this->numberOfPoints / 4) + 1; i++)
     {
@@ -179,8 +182,10 @@ void Dataset::calcMean(int center, int *dataPoints)
             if (tmp < minDist || tmp != 0)
             {
                 minDist = tmp;
+                index = j;
             }
         }
+        assign[i] = index;
     }
 
     std::cout << minDist << std::endl;
