@@ -111,6 +111,7 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
     const int number_of_iterations = 20;
     // Define the root process
     int root = 0;
+    int *clusterAssignment = new int[100];
     int *nodeArray = new int[4];
 
     int *sendBuffer;
@@ -123,6 +124,7 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
         for (int i = 0; i < this->numberOfPoints; i++)
         {
             sendBuffer[i] = this->pointList[i];
+            clusterAssignment[i] = 0;
         }
 
         // brodcast the number of clusters to all the nodes
@@ -146,9 +148,15 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
 
     MPI_Bcast(nodeArray, 4, MPI_INT, root, comm);
 
+    // receive buffer
     int *recvBuffer = new int[25];
+    // assignment receiver
+    int *assignRecv = new int[25];
 
     MPI_Scatter((void *)sendBuffer, this->numberOfPoints / number_of_processors, MPI_INT, (void *)recvBuffer, this->numberOfPoints / number_of_processors, MPI_INT, root, comm);
+
+    // TODO: do this until reach the max iteration
+    MPI_Scatter((void *)clusterAssignment, this->numberOfPoints / number_of_processors, MPI_INT, (void *)assignRecv, this->numberOfPoints / number_of_processors, MPI_INT, root, comm);
 
     this->calcMean(nodeArray[rank], recvBuffer);
 }
