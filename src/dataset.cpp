@@ -1,3 +1,6 @@
+//@note: you should include files without specifing here the path
+//       you should instead add the proper flags to the compiler to indicate the
+//       include path
 #include "../lib/dataset.h"
 
 Point::Point(int pointId, int pointValue)
@@ -141,9 +144,13 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
     int root = 0;
 
     // Create an array of Cluster on the root process
+    //@note: should prefer managed memory (std::vector to this)
+    //@note: `NULL` is deprecated in C++, use `nullptr` instead
+    // similar comments hold true for several points in the code below
     Cluster *array = NULL;
     if (rank == 0)
     {
+        //@note: why 100? if it is the number of clusters it should at least be a parameter
         array = new Cluster[100];
         // Fill the array with some data using constructors
         for (int i = 0; i < 100; i++)
@@ -151,6 +158,7 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
             std::vector<Point> points;
             for (int j = 0; j < i + 1; j++)
             {
+                //@note: here could have been a nice application of `emplace_back`
                 points.push_back(Point(j, i * j)); // Use Point constructor
             }
             array[i] = Cluster(i, points); // Use Cluster constructor
@@ -213,7 +221,11 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
         MPI_Unpack(recvbuf, recvbuf_size, &position, &buffer->data[i].value, 1, MPI_INT, MPI_COMM_WORLD);
     }
 
+    //@note: you are moving data around but how are you building clusters?
+
     // Print the received data on each process
+    //@note: I know `std::cout` is a bit clunky but it is more idiomatic and should be preferred
+    //       However, since C++23 we will have std::format which is better!
     printf("Process %d received %d clusters:\n", rank, 100 / 4);
 
     printf("Cluster with id %d and data:\n", buffer->id);

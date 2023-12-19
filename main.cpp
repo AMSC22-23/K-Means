@@ -4,6 +4,8 @@
 
 #include "./lib/dataset.h"
 
+//@note: you should write a program where the number of threads can be changed at run-time
+//@note: for defining numerical constants (known at compile-time) you should prefer `constexpr`
 #define NUM_THREAD 4
 
 int main(int argc, char *argv[])
@@ -27,9 +29,9 @@ int main(int argc, char *argv[])
     Dataset data(100, 5, 2, "test");
     data.generateData();
     data.readData("test");
-    //  data.showDataPoints();
+    data.showDataPoints();
     data.createClusters(rank, MPI_COMM_WORLD);
-    // data.showTheClusterData();
+    data.showTheClusterData();
 
     MPI_Finalize();
 }
