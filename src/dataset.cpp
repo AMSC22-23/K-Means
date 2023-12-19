@@ -158,31 +158,81 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
     // TODO: do this until reach the max iteration
     //    MPI_Scatter((void *)clusterAssignment, this->numberOfPoints / number_of_processors, MPI_INT, (void *)assignRecv, this->numberOfPoints / number_of_processors, MPI_INT, root, comm);
 
-    this->initAssignCluster(nodeArray, recvBuffer, cluster);
-
-    for (int j = 0; j < this->cluster[nodeArray[rank]].size(); j++)
+    if (rank == 0)
     {
-        std::cout << nodeArray[rank] << " " << this->cluster[nodeArray[rank]][j] << std::endl;
+        this->initAssignCluster(nodeArray, recvBuffer, cluster);
+        int buffer_size = 0;
+        char *buffer = nullptr;
+
+        buffer_size += sizeof(int);
+        for (const auto &p : this->cluster)
+        {
+            buffer_size += sizeof(int) * sizeof(int);
+            buffer_size += p.second.size() * sizeof(int);
+        }
+
+        buffer = new char[buffer_size];
+
+        // pack the map into the buffer
+        int position = 0;
+        int num_keys = cluster.size();
+        MPI_Pack(&num_keys, 1, MPI_INT, buffer, buffer_size, &position, comm);
+        for (const auto &p : cluster)
+        {
+            int key = p.first;
+            MPI_Pack(&key, 1, MPI_INT, buffer, buffer_size, &position, comm);
+            int value_size = p.second.size();
+            MPI_Pack(&value_size, 1, MPI_INT, buffer, buffer_size, &position, comm);
+            MPI_Pack(p.second.data(), value_size, MPI_INT, buffer, buffer_size, &position, comm);
+        }
+
+        // broadcast the size of the buffer to all processes
+        MPI_Bcast(&buffer_size, 1, MPI_INT, 0, comm);
+
+        // allocate the buffer on the non-root processes
+        if (rank != 0)
+        {
+            buffer = new char[buffer_size];
+        }
+
+        // broadcast the buffer to all processes
+        MPI_Bcast(buffer, buffer_size, MPI_PACKED, 0, comm);
+
+        // unpack the buffer into the map on the non-root processes
+        if (rank != 0)
+        {
+            int position = 0;
+            int num_keys;
+            MPI_Unpack(buffer, buffer_size, &position, &num_keys, 1, MPI_INT, comm);
+            for (int i = 0; i < num_keys; i++)
+            {
+                int key;
+                MPI_Unpack(buffer, buffer_size, &position, &key, 1, MPI_INT, comm);
+                int value_size;
+                MPI_Unpack(buffer, buffer_size, &position, &value_size, 1, MPI_INT, comm);
+                int *value = new int[value_size];
+                MPI_Unpack(buffer, buffer_size, &position, value, value_size, MPI_INT, comm);
+                cluster[key] = std::vector<int>(value, value + value_size);
+                delete[] value;
+            }
+        }
+
+        // print the map on each process
+        for (const auto &p : cluster)
+        {
+            std::cout << "Process " << rank << ": "
+                      << p.first << " -> ";
+            for (int x : p.second)
+            {
+                std::cout << x << " ";
+            }
+            std::cout << std::endl;
+        }
     }
-
-    //    MPI_Gather((void *)assignRecv, (this->numberOfPoints / number_of_processors), MPI_INT, (void *)clusterAssignment, (this->numberOfPoints / number_of_processors), MPI_INT, root, comm);
-
-    //    if (rank == 0)
-    //        for (int i = 0; i < 25; i++)
-    //        {
-    //            std::cout << "Things i'm receiving is: " << clusterAssignment[i] << std::endl;
-    //        }
-    //    {
-    //        this->calcMean(nodeArray, recvBuffer, clusterAssignment);
-    //    }
 }
 
 void Dataset::initAssignCluster(int *center, int *dataPoints, std::map<int, std::vector<int>> cluster)
 {
-
-    int x = 0;
-    int tmp = 0;
-    int minDist = 100000000;
 
     for (int j = 0; j < this->numberOfClusters; j++)
     {
@@ -193,34 +243,46 @@ void Dataset::initAssignCluster(int *center, int *dataPoints, std::map<int, std:
     }
 }
 
-// for (int i = 0; i < (this->numberOfPoints / 4); i++)
-//{
-//     for (int j = 0; j < this->numberOfClusters; j++)
-//     {
-//         x = abs(center[j] - dataPoints[i]);
-//         tmp = std::sqrt(std::pow(x, 2));
-//         int k_index, v_index;
-//         for (int t = 0; t < 4; t++)
-//         {
-//             for (int l = 0; l < 25; l++)
-//             {
-//                 if (dataPoints[i] == this->cluster[t][l])
-//                 {
-//                     // store the location of previous cluster
-//                     k_index = t;
-//                     v_index = l;
-//                 }
-//             }
-//         }
-//
-//         if (tmp < minDist)
-//         {
-//             minDist = tmp;
-//             // this->cluster[k_index].erase(this->cluster[k_index].begin() + v_index);
-//             // this->cluster[center[j]].push_back(dataPoints[i]);
-//         }
-//     }
-// }
+void Dataset::reAssignCluster(int *center, int *dataPoints, std::map<int, std::vector<int>> cluster)
+{
+    int x = 0;
+    int tmp = 0;
+    int minDist = 100000000;
+    for (int i = 0; i < (this->numberOfPoints / 4); i++)
+
+        for (int j = 0; j < this->numberOfClusters; j++)
+        {
+            x = abs(center[j] - dataPoints[i]);
+            tmp = std::sqrt(std::pow(x, 2));
+            int k_index = 0, v_index = 0;
+            int counterIndex = 0,
+                counterValue = 0;
+
+            for (auto const &t : this->cluster)
+            {
+
+                for (auto const &l : t.second)
+                {
+                    if (dataPoints[i] == l)
+                    {
+                        // store the location of previous cluster
+                        k_index = counterIndex;
+                        v_index = counterValue;
+                    }
+                    counterValue += 1;
+                }
+                counterIndex += 1;
+            }
+
+            if (tmp < minDist)
+            {
+                minDist = tmp;
+                // this->cluster[k_index].erase(this->cluster[k_index].begin() + v_index);
+                // std::cout << center[j] << std::endl;
+                this->cluster[center[j]].push_back(dataPoints[i]);
+            }
+        }
+}
 
 void Dataset::calcMean(int *ceneter, int *dataPoints, int *assign)
 {
@@ -233,3 +295,19 @@ void Dataset::calcMean(int *ceneter, int *dataPoints, int *assign)
         }
     }
 }
+
+// for (int j = 0; j < this->cluster[nodeArray[rank]].size(); j++)
+//{
+//  std::cout << nodeArray[rank] << " " << this->cluster[nodeArray[rank]][j] << std::endl;
+//}
+
+//    MPI_Gather((void *)assignRecv, (this->numberOfPoints / number_of_processors), MPI_INT, (void *)clusterAssignment, (this->numberOfPoints / number_of_processors), MPI_INT, root, comm);
+
+//    if (rank == 0)
+//        for (int i = 0; i < 25; i++)
+//        {
+//            std::cout << "Things i'm receiving is: " << clusterAssignment[i] << std::endl;
+//        }
+//    {
+//        this->calcMean(nodeArray, recvBuffer, clusterAssignment);
+//    }
