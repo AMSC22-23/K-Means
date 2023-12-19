@@ -1,11 +1,5 @@
 #include "../lib/dataset.h"
 
-Point::Point(int pointId, int pointValue)
-{
-    this->id = pointId;
-    this->value = pointValue;
-}
-
 Dataset::Dataset(int numberOfPoints, int numberOfClusters, int maxIteraion, std::string filename)
 {
     this->numberOfPoints = numberOfPoints;
@@ -94,13 +88,10 @@ void Dataset::readData(std::string filename)
                 {
                     // read each line until the end of the file
                     // process the line
-                    int idNumber = 1;
                     std::stringstream ss(line);
                     while (std::getline(ss, line, ','))
                     {
-                        Point point(idNumber, std::stod(line));
-                        idNumber++;
-                        this->pointList.push_back(point);
+                        this->pointList.push_back(std::stod(line));
                     }
                 }
                 myfile.close(); // close the file
@@ -114,131 +105,209 @@ void Dataset::readData(std::string filename)
     }
 };
 
-void Dataset::showDataPoints()
-{
-    for (int i = 0; i < this->pointList.size(); i++)
-    {
-        std::cout << this->pointList[i].id << ' ' << this->pointList[i].value << std::endl;
-    }
-}
-
-Cluster::Cluster(int id)
-{
-    this->id = id;
-    this->mean = 0;
-}
-
-Cluster::Cluster(int id, std::vector<Point> data)
-{
-    this->id = id;
-    this->data = data;
-}
-
 void Dataset::createClusters(int rank, MPI_Comm comm)
 {
-
+    const int number_of_processors = 4;
+    const int number_of_iterations = 20;
     // Define the root process
     int root = 0;
 
-    // Create an array of Cluster on the root process
-    Cluster *array = NULL;
+    int *nodeArray = new int[4];
+
+    int *sendBuffer;
+    // send operation
     if (rank == 0)
     {
-        array = new Cluster[100];
-        // Fill the array with some data using constructors
-        for (int i = 0; i < 100; i++)
+
+        sendBuffer = new int[100];
+
+        for (int i = 0; i < this->numberOfPoints; i++)
         {
-            std::vector<Point> points;
-            for (int j = 0; j < i + 1; j++)
-            {
-                points.push_back(Point(j, i * j)); // Use Point constructor
-            }
-            array[i] = Cluster(i, points); // Use Cluster constructor
+            sendBuffer[i] = this->pointList[i];
         }
+
+        // randomly select the center points for each cluster
+        for (int i = 0; i < this->numberOfClusters; i++)
+        {
+            int random = std::rand() % 24;
+            nodeArray[i] = sendBuffer[random];
+            cluster[sendBuffer[random]];
+        }
+
+        // brodcast the number of clusters to all the nodes
+        MPI_Bcast(&this->numberOfClusters, 1, MPI_INT, root, comm);
+        // brodcast the number of data points to all the nodes
+        MPI_Bcast(&this->numberOfPoints, 1, MPI_INT, root, comm);
+    }
+    else
+    {
+        MPI_Bcast(&this->numberOfClusters, 1, MPI_INT, root, comm);
+
+        MPI_Bcast(&this->numberOfPoints, 1, MPI_INT, root, comm);
     }
 
-    // Create a buffer of Cluster on each process
-    Cluster *buffer = new Cluster[100];
+    MPI_Bcast(nodeArray, 4, MPI_INT, root, comm);
 
-    // Create a send buffer on the root process
-    int *sendbuf = NULL;
-    int sendbuf_size = 0;
+    // receive buffer
+    int *recvBuffer = new int[25];
+    // assignment receiver
+    int *assignRecv = new int[100];
+
+    MPI_Scatter((void *)sendBuffer, this->numberOfPoints / number_of_processors, MPI_INT, (void *)recvBuffer, this->numberOfPoints / number_of_processors, MPI_INT, root, comm);
+
+    // TODO: do this until reach the max iteration
+    //    MPI_Scatter((void *)clusterAssignment, this->numberOfPoints / number_of_processors, MPI_INT, (void *)assignRecv, this->numberOfPoints / number_of_processors, MPI_INT, root, comm);
+
     if (rank == 0)
     {
-        // Calculate the size of the send buffer
-        for (int i = 0; i < 100; i++)
+        this->initAssignCluster(nodeArray, recvBuffer, cluster);
+        int buffer_size = 0;
+        char *buffer = nullptr;
+
+        buffer_size += sizeof(int);
+        for (const auto &p : this->cluster)
         {
-            sendbuf_size += 2 * sizeof(int);                        // For id and vector size
-            sendbuf_size += array[i].data.size() * 2 * sizeof(int); // For vector data
+            buffer_size += sizeof(int) * sizeof(int);
+            buffer_size += p.second.size() * sizeof(int);
         }
-        // Allocate the send buffer
-        sendbuf = new int[sendbuf_size / sizeof(int)];
-        // Pack the array of Cluster into the send buffer
+
+        buffer = new char[buffer_size];
+
+        // pack the map into the buffer
         int position = 0;
-        for (int i = 0; i < 100; i++)
+        int num_keys = cluster.size();
+        MPI_Pack(&num_keys, 1, MPI_INT, buffer, buffer_size, &position, comm);
+        for (const auto &p : cluster)
         {
-            MPI_Pack(&array[i].id, 1, MPI_INT, sendbuf, sendbuf_size, &position, MPI_COMM_WORLD);
-            int vector_size = array[i].data.size();
-            MPI_Pack(&vector_size, 1, MPI_INT, sendbuf, sendbuf_size, &position, MPI_COMM_WORLD);
-            for (int j = 0; j < vector_size; j++)
+            int key = p.first;
+            MPI_Pack(&key, 1, MPI_INT, buffer, buffer_size, &position, comm);
+            int value_size = p.second.size();
+            MPI_Pack(&value_size, 1, MPI_INT, buffer, buffer_size, &position, comm);
+            MPI_Pack(p.second.data(), value_size, MPI_INT, buffer, buffer_size, &position, comm);
+        }
+
+        // broadcast the size of the buffer to all processes
+        MPI_Bcast(&buffer_size, 1, MPI_INT, 0, comm);
+
+        // allocate the buffer on the non-root processes
+        if (rank != 0)
+        {
+            buffer = new char[buffer_size];
+        }
+
+        // broadcast the buffer to all processes
+        MPI_Bcast(buffer, buffer_size, MPI_PACKED, 0, comm);
+
+        // unpack the buffer into the map on the non-root processes
+        if (rank != 0)
+        {
+            int position = 0;
+            int num_keys;
+            MPI_Unpack(buffer, buffer_size, &position, &num_keys, 1, MPI_INT, comm);
+            for (int i = 0; i < num_keys; i++)
             {
-                MPI_Pack(&array[i].data[j].id, 1, MPI_INT, sendbuf, sendbuf_size, &position, MPI_COMM_WORLD);
-                MPI_Pack(&array[i].data[j].value, 1, MPI_INT, sendbuf, sendbuf_size, &position, MPI_COMM_WORLD);
+                int key;
+                MPI_Unpack(buffer, buffer_size, &position, &key, 1, MPI_INT, comm);
+                int value_size;
+                MPI_Unpack(buffer, buffer_size, &position, &value_size, 1, MPI_INT, comm);
+                int *value = new int[value_size];
+                MPI_Unpack(buffer, buffer_size, &position, value, value_size, MPI_INT, comm);
+                cluster[key] = std::vector<int>(value, value + value_size);
+                delete[] value;
             }
         }
-    }
 
-    // Create a receive buffer on each process
-    int *recvbuf = NULL;
-    int recvbuf_size = 0;
-    // Calculate the size of the receive buffer
-    recvbuf_size += 2 * sizeof(int);              // For id and vector size
-    recvbuf_size += (rank + 1) * 2 * sizeof(int); // For vector data
-    // Allocate the receive buffer
-    recvbuf = new int[recvbuf_size / sizeof(int)];
-
-    // Scatter the send buffer from the root to all processes
-    MPI_Scatter(sendbuf, recvbuf_size, MPI_PACKED, recvbuf, recvbuf_size, MPI_PACKED, 0, MPI_COMM_WORLD);
-
-    // Unpack the receive buffer into the buffer of Cluster
-    int position = 0;
-    MPI_Unpack(recvbuf, recvbuf_size, &position, &buffer->id, 1, MPI_INT, MPI_COMM_WORLD);
-    int vector_size = 0;
-    MPI_Unpack(recvbuf, recvbuf_size, &position, &vector_size, 1, MPI_INT, MPI_COMM_WORLD);
-    buffer->data.resize(vector_size);
-
-    for (int i = 0; i < vector_size; i++)
-    {
-        MPI_Unpack(recvbuf, recvbuf_size, &position, &buffer->data[i].id, 1, MPI_INT, MPI_COMM_WORLD);
-        MPI_Unpack(recvbuf, recvbuf_size, &position, &buffer->data[i].value, 1, MPI_INT, MPI_COMM_WORLD);
-    }
-
-    // Print the received data on each process
-    printf("Process %d received %d clusters:\n", rank, 100 / 4);
-
-    printf("Cluster with id %d and data:\n", buffer->id);
-    for (int j = 0; j < buffer->data.size(); j++)
-    {
-        printf("Point with id %d and value %d\n", buffer->data[j].id, buffer->data[j].value);
-    }
-    printf("\n");
-
-    // Free the memory
-    delete[] buffer;
-    delete[] recvbuf;
-    if (rank == 0)
-    {
-        delete[] array;
-        delete[] sendbuf;
+        // print the map on each process
+        for (const auto &p : cluster)
+        {
+            std::cout << "Process " << rank << ": "
+                      << p.first << " -> ";
+            for (int x : p.second)
+            {
+                std::cout << x << " ";
+            }
+            std::cout << std::endl;
+        }
     }
 }
 
-void Dataset::showTheClusterData()
+void Dataset::initAssignCluster(int *center, int *dataPoints, std::map<int, std::vector<int>> cluster)
 {
-    std::cout << "----- The Cluster -----" << std::endl;
 
-    for (int i = 0; i < this->clusterList.size(); i++)
+    for (int j = 0; j < this->numberOfClusters; j++)
     {
-        std::cout << this->clusterList[i].id << std::endl;
+        for (int i = 0; i < 25; i++)
+        {
+            this->cluster[center[j]].push_back(dataPoints[i]);
+        }
     }
 }
+
+void Dataset::reAssignCluster(int *center, int *dataPoints, std::map<int, std::vector<int>> cluster)
+{
+    int x = 0;
+    int tmp = 0;
+    int minDist = 100000000;
+    for (int i = 0; i < (this->numberOfPoints / 4); i++)
+
+        for (int j = 0; j < this->numberOfClusters; j++)
+        {
+            x = abs(center[j] - dataPoints[i]);
+            tmp = std::sqrt(std::pow(x, 2));
+            int k_index = 0, v_index = 0;
+            int counterIndex = 0,
+                counterValue = 0;
+
+            for (auto const &t : this->cluster)
+            {
+
+                for (auto const &l : t.second)
+                {
+                    if (dataPoints[i] == l)
+                    {
+                        // store the location of previous cluster
+                        k_index = counterIndex;
+                        v_index = counterValue;
+                    }
+                    counterValue += 1;
+                }
+                counterIndex += 1;
+            }
+
+            if (tmp < minDist)
+            {
+                minDist = tmp;
+                // this->cluster[k_index].erase(this->cluster[k_index].begin() + v_index);
+                // std::cout << center[j] << std::endl;
+                this->cluster[center[j]].push_back(dataPoints[i]);
+            }
+        }
+}
+
+void Dataset::calcMean(int *ceneter, int *dataPoints, int *assign)
+{
+    for (int j = 0; j < this->numberOfClusters; j++)
+    {
+        // std::cout << "The center is: " << ceneter[j] << " and data values are : " << std::endl;
+        for (int i = 0; i < this->numberOfPoints / 4; i++)
+        {
+            //   std::cout << dataPoints[i] << std::endl;
+        }
+    }
+}
+
+// for (int j = 0; j < this->cluster[nodeArray[rank]].size(); j++)
+//{
+//  std::cout << nodeArray[rank] << " " << this->cluster[nodeArray[rank]][j] << std::endl;
+//}
+
+//    MPI_Gather((void *)assignRecv, (this->numberOfPoints / number_of_processors), MPI_INT, (void *)clusterAssignment, (this->numberOfPoints / number_of_processors), MPI_INT, root, comm);
+
+//    if (rank == 0)
+//        for (int i = 0; i < 25; i++)
+//        {
+//            std::cout << "Things i'm receiving is: " << clusterAssignment[i] << std::endl;
+//        }
+//    {
+//        this->calcMean(nodeArray, recvBuffer, clusterAssignment);
+//    }
