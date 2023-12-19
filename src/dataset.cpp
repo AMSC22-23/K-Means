@@ -151,21 +151,25 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
     // receive buffer
     int *recvBuffer = new int[25];
     // assignment receiver
-    int *assignRecv = new int[25];
+    int *assignRecv = new int[100];
 
     MPI_Scatter((void *)sendBuffer, this->numberOfPoints / number_of_processors, MPI_INT, (void *)recvBuffer, this->numberOfPoints / number_of_processors, MPI_INT, root, comm);
 
     // TODO: do this until reach the max iteration
     MPI_Scatter((void *)clusterAssignment, this->numberOfPoints / number_of_processors, MPI_INT, (void *)assignRecv, this->numberOfPoints / number_of_processors, MPI_INT, root, comm);
 
-    this->calcMean(nodeArray[rank], recvBuffer, assignRecv);
+    this->assignCluster(nodeArray[rank], recvBuffer, assignRecv);
 
-    MPI_Gather(recvBuffer, (this->numberOfPoints / number_of_processors), MPI_INT, clusterAssignment, (this->numberOfPoints / number_of_processors), MPI_INT, root, comm);
+    MPI_Gather((void *)assignRecv, (this->numberOfPoints / number_of_processors), MPI_INT, (void *)clusterAssignment, (this->numberOfPoints / number_of_processors), MPI_INT, root, comm);
+
+    if (rank == 0)
+    {
+        this->calcMean(nodeArray, recvBuffer, clusterAssignment);
+    }
 }
 
-void Dataset::calcMean(int center, int *dataPoints, int *assign)
+void Dataset::assignCluster(int center, int *dataPoints, int *assign)
 {
-    std::cout << "We are in calc mean function" << std::endl;
 
     int x = 0;
     int tmp = 0;
@@ -187,6 +191,15 @@ void Dataset::calcMean(int center, int *dataPoints, int *assign)
         }
         assign[i] = index;
     }
+}
 
-    std::cout << minDist << std::endl;
+void Dataset::calcMean(int *ceneter, int *dataPoints, int *assign)
+{
+    for (int i = 0; i < this->numberOfPoints / 4; i++)
+    {
+        for (int j = 0; j < this->numberOfClusters; j++)
+        {
+            std::cout << "The center is" << ceneter[j] << std::endl;
+        }
+    }
 }

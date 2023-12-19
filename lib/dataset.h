@@ -23,5 +23,6 @@ struct Dataset
     void generateData();
     void readData(std::string filename);
     void createClusters(int rank, MPI_Comm comm);
-    void calcMean(int center, int *dataPoints, int *assign);
+    void assignCluster(int ceneter, int *dataPoints, int *assign);
+    void calcMean(int *center, int *dataPoints, int *assign);
 };
