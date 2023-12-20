@@ -162,7 +162,7 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
 
     std::map<int, std::vector<int>> gatherCluster;
 
-    const int size = 100;
+    const int size = 4;
 
     // use a vector to store the buffer
     std::vector<char> buffer;
@@ -170,16 +170,20 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
     // pack the map into the buffer
     int position = 0;
     int num_keys = assignCluster.size();
-    buffer.resize(sizeof(int) + (num_keys * size) * (sizeof(int) * 2));
+    buffer.resize(sizeof(int) + (num_keys) * (sizeof(int) * 2));
+
     MPI_Pack(&num_keys, 1, MPI_INT, buffer.data(), buffer.size(), &position, comm);
     for (const auto &p : assignCluster)
     {
         int key = p.first;
-        MPI_Pack(&key, 1, MPI_INT, buffer.data(), buffer.size(), &position, comm);
-        int value_size = p.second.size();
-        MPI_Pack(&value_size, 1, MPI_INT, buffer.data(), buffer.size(), &position, comm);
-        buffer.resize(buffer.size() + value_size * sizeof(int));
-        MPI_Pack(p.second.data(), value_size, MPI_INT, buffer.data(), buffer.size(), &position, comm);
+        if (p.second.size() > 0)
+        {
+            MPI_Pack(&key, 1, MPI_INT, buffer.data(), buffer.size(), &position, comm);
+            int value_size = p.second.size();
+            MPI_Pack(&value_size, 1, MPI_INT, buffer.data(), buffer.size(), &position, comm);
+            buffer.resize(buffer.size() + value_size * sizeof(int));
+            MPI_Pack(p.second.data(), value_size, MPI_INT, buffer.data(), buffer.size(), &position, comm);
+        }
     }
 
     // gather the size of the buffer from all processes
@@ -219,17 +223,17 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
         {
             int num_keys1;
             MPI_Unpack(gather_buffer.data(), gather_buffer_size[i], &position1, &num_keys1, 1, MPI_INT, comm);
-            for (int j = 0; j < num_keys1; j++)
+
+            for (int j = 0; j < num_keys1 - 1; j++)
             {
                 int key;
                 MPI_Unpack(gather_buffer.data(), gather_buffer_size[i], &position1, &key, 1, MPI_INT, comm);
                 int value_size;
                 MPI_Unpack(gather_buffer.data(), gather_buffer_size[i], &position1, &value_size, 1, MPI_INT, comm);
                 std::vector<int> value(value_size);
+
                 MPI_Unpack(gather_buffer.data(), gather_buffer_size[i], &position1, value.data(), value_size, MPI_INT, comm);
 
-                // when do the printing only one of the clusters have data
-                std::cout << key << " " << value.data() << std::endl;
                 gatherCluster[key] = value;
             }
         }
