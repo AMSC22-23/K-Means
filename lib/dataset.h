@@ -1,4 +1,4 @@
-#pragma DATASET_H
+#pragma once
 
 #include <iostream>
 #include <fstream>
