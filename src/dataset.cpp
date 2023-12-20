@@ -112,14 +112,15 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
     // Define the root process
     int root = 0;
 
-    int *nodeArray = new int[4];
+    // int *nodeArray = new int[4];
+    std::vector<int> nodeArray;
+    nodeArray.resize(4);
 
-    int *sendBuffer;
-    // send operation
+    std::vector<int> sendBuffer;
     if (rank == 0)
     {
 
-        sendBuffer = new int[100];
+        sendBuffer.resize(100);
 
         for (int i = 0; i < this->numberOfPoints; i++)
         {
@@ -146,12 +147,13 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
         MPI_Bcast(&this->numberOfPoints, 1, MPI_INT, root, comm);
     }
 
-    MPI_Bcast(nodeArray, 4, MPI_INT, root, comm);
+    MPI_Bcast(nodeArray.data(), 4, MPI_INT, root, comm);
 
     // receive buffer
-    int *recvBuffer = new int[25];
+    std::vector<int> recvBuffer;
+    recvBuffer.resize(25);
 
-    MPI_Scatter((void *)sendBuffer, this->numberOfPoints / number_of_processors, MPI_INT, (void *)recvBuffer, this->numberOfPoints / number_of_processors, MPI_INT, root, comm);
+    MPI_Scatter(sendBuffer.data(), this->numberOfPoints / number_of_processors, MPI_INT, recvBuffer.data(), this->numberOfPoints / number_of_processors, MPI_INT, root, comm);
 
     std::map<int, std::vector<int>> assignCluster = this->initAssignCluster(nodeArray[rank], recvBuffer, cluster);
 
@@ -160,7 +162,7 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
 
     std::map<int, std::vector<int>> gatherCluster;
 
-    const int size = 4;
+    const int size = 100;
 
     // use a vector to store the buffer
     std::vector<char> buffer;
@@ -185,18 +187,10 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
 
     int buffer_size = buffer.size();
 
-    buffer_size += sizeof(int); // add the size of num_keys
-    for (const auto &p : assignCluster)
-    {
-        buffer_size += sizeof(int) * 2;               // add the size of key and value_size
-        buffer_size += p.second.size() * sizeof(int); // add the size of the vector
-    }
-
     MPI_Gather(&buffer_size, 1, MPI_INT, gather_buffer_size.data(), 1, MPI_INT, 0, comm);
 
     // use a smart pointer to manage the memory for the gather buffer on the root process
-    std::unique_ptr<char[]> gather_buffer;
-
+    std::vector<int> gather_buffer;
     int total_buffer_size = 0;
 
     if (rank == 0)
@@ -205,7 +199,7 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
         {
             total_buffer_size += gather_buffer_size[i];
         }
-        gather_buffer = std::make_unique<char[]>(total_buffer_size);
+        gather_buffer.resize(total_buffer_size);
     }
 
     // gather the buffer from all processes
@@ -216,48 +210,48 @@ void Dataset::createClusters(int rank, MPI_Comm comm)
         displs[i] = displs[i - 1] + gather_buffer_size[i - 1];
     }
 
-    MPI_Gatherv(buffer.data(), buffer.size(), MPI_PACKED, gather_buffer.get(), gather_buffer_size.data(), displs.data(), MPI_PACKED, 0, comm);
+    MPI_Gatherv(buffer.data(), buffer.size(), MPI_PACKED, gather_buffer.data(), gather_buffer_size.data(), displs.data(), MPI_PACKED, 0, comm);
 
-    // unpack the buffer into the map on the root process
     if (rank == 0)
     {
         int position1 = 0;
         for (int i = 0; i < size; i++)
         {
             int num_keys1;
-            MPI_Unpack(gather_buffer.get(), gather_buffer_size[i], &position1, &num_keys1, 1, MPI_INT, comm);
-
+            MPI_Unpack(gather_buffer.data(), gather_buffer_size[i], &position1, &num_keys1, 1, MPI_INT, comm);
             for (int j = 0; j < num_keys1; j++)
             {
                 int key;
-                MPI_Unpack(gather_buffer.get(), gather_buffer_size[i], &position1, &key, 1, MPI_INT, comm);
+                MPI_Unpack(gather_buffer.data(), gather_buffer_size[i], &position1, &key, 1, MPI_INT, comm);
                 int value_size;
-                MPI_Unpack(gather_buffer.get(), gather_buffer_size[i], &position1, &value_size, 1, MPI_INT, comm);
+                MPI_Unpack(gather_buffer.data(), gather_buffer_size[i], &position1, &value_size, 1, MPI_INT, comm);
                 std::vector<int> value(value_size);
-                MPI_Unpack(gather_buffer.get(), gather_buffer_size[i], &position1, value.data(), value_size, MPI_INT, comm);
-                for (int t = 0; t < value.size(); t++)
-                {
-                    gatherCluster[key].emplace_back(value[t]);
-                }
-            }
-        }
+                MPI_Unpack(gather_buffer.data(), gather_buffer_size[i], &position1, value.data(), value_size, MPI_INT, comm);
 
-        // print the map on the root process
-        for (const auto &p : gatherCluster)
-        {
-
-            for (int x : p.second)
-            {
-                std::cout << "Process "
-                          << rank << ": "
-                          << p.first << " " << x << "  " << std::endl;
+                // when do the printing only one of the clusters have data
+                std::cout << key << " " << value.data() << std::endl;
+                gatherCluster[key] = value;
             }
-            std::cout << std::endl;
         }
     }
+
+    // print the map on the root process
+    for (const auto &p : gatherCluster)
+    {
+
+        for (int x : p.second)
+        {
+            std::cout << "Process " << rank << ": "
+                      << p.first << " " << x << "  " << std::endl;
+        }
+        std::cout << std::endl;
+    }
+
+    // TODO: put the data points in the proper cluster untile there is no changes happen in out clusters
+    // TODO: calculate the mean
 }
 
-std::map<int, std::vector<int>> Dataset::initAssignCluster(int center, int *dataPoints, std::map<int, std::vector<int>> cluster)
+std::map<int, std::vector<int>> Dataset::initAssignCluster(int center, std::vector<int> dataPoints, std::map<int, std::vector<int>> cluster)
 {
     for (int i = 0; i < 25; i++)
     {
