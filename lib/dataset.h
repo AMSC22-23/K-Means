@@ -25,7 +25,7 @@ struct Dataset
     void generateData();
     void readData(std::string filename);
     void createClusters(int rank, MPI_Comm comm);
-    void initAssignCluster(int *ceneter, int *dataPoints, std::map<int, std::vector<int>> cluster);
+    std::map<int, std::vector<int>> initAssignCluster(int ceneter, int *dataPoints, std::map<int, std::vector<int>> cluster);
 
     void reAssignCluster(int *ceneter, int *dataPoints, std::map<int, std::vector<int>> cluster);
 
