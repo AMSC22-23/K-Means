@@ -4,8 +4,6 @@
 
 #include "./lib/dataset.h"
 
-#define NUM_THREAD 4
-
 int main(int argc, char *argv[])
 {
     MPI_Init(&argc, &argv);
