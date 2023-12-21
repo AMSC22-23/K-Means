@@ -24,8 +24,6 @@ include_directories(/lib)
 
 set(SOURCES 
     ./main.cpp
-    lib/dataset.h
-    src/dataset.cpp
 
 )
 
