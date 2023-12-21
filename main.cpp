@@ -10,6 +10,7 @@
 struct Point
 {
     double x, y;
+    bool assigned;
 };
 
 class Cluster
@@ -80,27 +81,23 @@ void kmeans(std::vector<Point> &data, int k)
     for (int i = 0; i < 1000; i++)
     {
 
-        // finding closest cluster for each point
         for (Point &p : data)
         {
-            int closest = 0;
-            // first calculated distance from the center
-            double closestDist = clusters[0].distance(p, clusters[0].centroid);
-            for (int i = 1; i < k; ++i)
-            {
-                double dist = clusters[i].distance(p, clusters[i].centroid);
-                if (dist < closestDist)
+            if (!p.assigned)
+            { // Only consider points that have not been assigned to a cluster
+                int closest = 0;
+                double closestDist = clusters[0].distance(p, clusters[0].centroid);
+                for (int i = 1; i < k; ++i)
                 {
-                    closest = i;
-                    closestDist = dist;
+                    double dist = clusters[i].distance(p, clusters[i].centroid);
+                    if (dist < closestDist)
+                    {
+                        closest = i;
+                        closestDist = dist;
+                    }
                 }
-            }
-
-            // check if current point is already in the proper cluster
-
-            if (clusters[closest].points.empty() || p.x != clusters[closest].points.back().x || p.y != clusters[closest].points.back().y)
-            {
                 clusters[closest].points.push_back(p);
+                p.assigned = true; // Mark the point as assigned
             }
         }
         for (Cluster &c : clusters)
