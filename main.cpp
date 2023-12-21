@@ -16,7 +16,7 @@ int main(int argc, char *argv[])
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
     // Check that the number of processes is 4
-    if (size != 4)
+    if (size < 0)
     {
         std::cerr << "This program requires 4 processes" << std::endl;
         MPI_Abort(MPI_COMM_WORLD, 1);

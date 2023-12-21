@@ -1,4 +1,6 @@
 #include "../lib/dataset.h"
+#include "../lib/json.hpp"
+using json = nlohmann::json;
 
 Dataset::Dataset(int numberOfPoints, int numberOfClusters, int maxIteraion, std::string filename)
 {
@@ -105,151 +107,101 @@ void Dataset::readData(std::string filename)
     }
 };
 
+// Define a struct to represent a person
+struct Person
+{
+    std::string name;
+    int age;
+};
+
+// Define a function to serialize a person to a JSON object
+json serialize(const Person &person)
+{
+    // Create a JSON object
+    json j;
+    // Add the name and age of the person to the JSON object
+    j["name"] = person.name;
+    j["age"] = person.age;
+    // Return the JSON object
+    return j;
+}
+
+// Define a function to deserialize a JSON object to a person
+Person deserialize(const json &j)
+{
+    // Create a person to store the result
+    Person person;
+    // Get the name and age of the person from the JSON object
+    person.name = j["name"].get<std::string>();
+    person.age = j["age"].get<int>();
+    // Return the person
+
+    std::cout << person.age << " " << person.name << std::endl;
+
+    return person;
+}
+
 void Dataset::createClusters(int rank, MPI_Comm comm)
 {
     const int number_of_processors = 4;
     const int number_of_iterations = 20;
     // Define the root process
-    int root = 0;
+    int ROOT = 0;
 
-    // int *nodeArray = new int[4];
-    std::vector<int> nodeArray;
-    nodeArray.resize(4);
+    int ierr;
+    // Serialize and prepare data for scatter on the root process
 
-    std::vector<int> sendBuffer;
-    if (rank == 0)
+    // Serialize and prepare data for scatter on the root process
+    json j;
+
+    // Create a vector of person objects
+
+    std::vector<Person> persons = {{"Alice", 30}, {"Bob", 25}, {"Charlie", 28}, {"David", 32}};
+    // Serialize each person object to a JSON object
+    for (const auto &person : persons)
     {
-
-        sendBuffer.resize(100);
-
-        for (int i = 0; i < this->numberOfPoints; i++)
-        {
-            sendBuffer[i] = this->pointList[i];
-        }
-
-        // randomly select the center points for each cluster
-        for (int i = 0; i < this->numberOfClusters; i++)
-        {
-            int random = std::rand() % 24;
-            nodeArray[i] = sendBuffer[random];
-            cluster[sendBuffer[random]];
-        }
-
-        // brodcast the number of clusters to all the nodes
-        MPI_Bcast(&this->numberOfClusters, 1, MPI_INT, root, comm);
-        // brodcast the number of data points to all the nodes
-        MPI_Bcast(&this->numberOfPoints, 1, MPI_INT, root, comm);
-    }
-    else
-    {
-        MPI_Bcast(&this->numberOfClusters, 1, MPI_INT, root, comm);
-
-        MPI_Bcast(&this->numberOfPoints, 1, MPI_INT, root, comm);
+        j.push_back(serialize(person));
     }
 
-    MPI_Bcast(nodeArray.data(), 4, MPI_INT, root, comm);
-
-    // receive buffer
-    std::vector<int> recvBuffer;
-    recvBuffer.resize(25);
-
-    MPI_Scatter(sendBuffer.data(), this->numberOfPoints / number_of_processors, MPI_INT, recvBuffer.data(), this->numberOfPoints / number_of_processors, MPI_INT, root, comm);
-
-    std::map<int, std::vector<int>> assignCluster = this->initAssignCluster(nodeArray[rank], recvBuffer, cluster);
-
-    std::vector<int> gatherData;
-    gatherData.resize(100);
-
-    std::map<int, std::vector<int>> gatherCluster;
-
-    const int size = 4;
-
-    // use a vector to store the buffer
-    std::vector<char> buffer;
-
-    // pack the map into the buffer
-    int position = 0;
-    int num_keys = assignCluster.size();
-    buffer.resize(sizeof(int) + (num_keys) * (sizeof(int) * 2));
-
-    MPI_Pack(&num_keys, 1, MPI_INT, buffer.data(), buffer.size(), &position, comm);
-    for (const auto &p : assignCluster)
+    // Broadcast the length of the JSON array to all processes
+    int json_len = j.dump().length();
+    ierr = MPI_Bcast(&json_len, 1, MPI_INT, ROOT, comm);
+    if (ierr != MPI_SUCCESS)
     {
-        int key = p.first;
-        if (p.second.size() > 0)
-        {
-            MPI_Pack(&key, 1, MPI_INT, buffer.data(), buffer.size(), &position, comm);
-            int value_size = p.second.size();
-            MPI_Pack(&value_size, 1, MPI_INT, buffer.data(), buffer.size(), &position, comm);
-            buffer.resize(buffer.size() + value_size * sizeof(int));
-            MPI_Pack(p.second.data(), value_size, MPI_INT, buffer.data(), buffer.size(), &position, comm);
-        }
+        std::cerr << "MPI_Bcast failed\n";
+        MPI_Finalize();
     }
 
-    // gather the size of the buffer from all processes
-    std::vector<int> gather_buffer_size(size);
+    // Calculate the size of each chunk based on the length of the JSON array and the number of processes
+    int chunk_size = json_len / 4;
+    // Allocate a buffer to store the JSON array on each process
+    char *json_buf = new char[chunk_size + 1];
 
-    int buffer_size = buffer.size();
-
-    MPI_Gather(&buffer_size, 1, MPI_INT, gather_buffer_size.data(), 1, MPI_INT, 0, comm);
-
-    // use a smart pointer to manage the memory for the gather buffer on the root process
-    std::vector<int> gather_buffer;
-    int total_buffer_size = 0;
-
-    if (rank == 0)
+    // Scatter the JSON array to all processes
+    ierr = MPI_Scatter(j.dump().c_str(), chunk_size + 1, MPI_CHAR, json_buf, chunk_size + 1, MPI_CHAR, ROOT, comm);
+    if (ierr != MPI_SUCCESS)
     {
-        for (int i = 0; i < size; i++)
-        {
-            total_buffer_size += gather_buffer_size[i];
-        }
-        gather_buffer.resize(total_buffer_size);
+        std::cerr << "MPI_Scatter failed\n";
+        delete[] json_buf;
+        MPI_Finalize();
     }
 
-    // gather the buffer from all processes
-    std::vector<int> displs(size);
-    displs[0] = 0;
-    for (int i = 1; i < size; i++)
+    // Deserialize the JSON array to a vector of person objects on each process
+    std::vector<Person> deserialized_persons;
+    // Calculate the start and stop indices of the for loop based on the rank and the chunk size
+    int start = rank * chunk_size;
+    int stop = start + chunk_size;
+    for (int i = start; i < stop - 1; i++)
     {
-        displs[i] = displs[i - 1] + gather_buffer_size[i - 1];
+        std::stringstream ss;
+        ss << json_buf[i];
+        deserialized_persons.push_back(deserialize(json::parse(ss)));
     }
 
-    MPI_Gatherv(buffer.data(), buffer.size(), MPI_PACKED, gather_buffer.data(), gather_buffer_size.data(), displs.data(), MPI_PACKED, 0, comm);
+    // Delete the buffer
+    delete[] json_buf;
 
-    if (rank == 0)
-    {
-        int position1 = 0;
-        for (int i = 0; i < size; i++)
-        {
-            int num_keys1;
-            MPI_Unpack(gather_buffer.data(), gather_buffer_size[i], &position1, &num_keys1, 1, MPI_INT, comm);
-
-            for (int j = 0; j < num_keys1 - 1; j++)
-            {
-                int key;
-                MPI_Unpack(gather_buffer.data(), gather_buffer_size[i], &position1, &key, 1, MPI_INT, comm);
-                int value_size;
-                MPI_Unpack(gather_buffer.data(), gather_buffer_size[i], &position1, &value_size, 1, MPI_INT, comm);
-                std::vector<int> value(value_size);
-
-                MPI_Unpack(gather_buffer.data(), gather_buffer_size[i], &position1, value.data(), value_size, MPI_INT, comm);
-
-                gatherCluster[key] = value;
-            }
-        }
-    }
-
-    // print the map on the root process
-    for (const auto &p : gatherCluster)
-    {
-
-        for (int x : p.second)
-        {
-            std::cout << "Process " << rank << ": "
-                      << p.first << " " << x << "  " << std::endl;
-        }
-        std::cout << std::endl;
-    }
+    // Print the deserialized vector of person objects on each process
 
     // TODO: put the data points in the proper cluster untile there is no changes happen in out clusters
     // TODO: calculate the mean
